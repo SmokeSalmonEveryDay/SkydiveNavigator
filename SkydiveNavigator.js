@@ -10,9 +10,6 @@ var groundPressure = Bangle.getPressure().then(output=>{groundPressure = output.
 // Pressure from barometer (Pa)
 var pressure = 101325;
 
-// Sink rate (m/s)
-var sinkRate = 4000;
-
 // Has closest dropzone been found
 var dropzoneSelected = false;
 
@@ -28,90 +25,70 @@ var deltaBearing;
 // Altitude to return to dropzone
 var returnAltitude = 0;
 
-// Data for log
-var logFrame = {
-  lat: 0,
-  lon: 0,
-  alt: 0,
-  speed: 0,
-  course: 0,
-  sinkRate: 0,
-  distance: 0,
-  deltaBearing: 0,
-  returnAltitude: 0
-};
-
-// Last altitude and time it was taken
+// Last altitude (m) and time it was taken
 var lastAltitude = {
   alt: 0, time: new Date()
 };
 
-function degreesToRadians(degrees)
-{
+
+function degreesToRadians(degrees) {
   radians = degrees / 57.2958;
   return radians;
 }
 
-function radiansToDegrees(radians)
-{
+function radiansToDegrees(radians) {
   degrees = radians * 57.2958;
   return degrees;
 }
 
-function metresToFeet(metres)
-{
+function metresToFeet(metres) {
   feet = metres *  3.2808;
   return feet;
 }
 
-var netheravon =
-{
-  lat: degreesToRadians(51.2428054), lon: degreesToRadians(-1.7620569)
+var netheravon = {
+  lat: degreesToRadians(51.2428054), lon: degreesToRadians(-1.7620569), alt: 134.6
 };
 
-var langar =
-{
-  lat: degreesToRadians(52.890602), lon: degreesToRadians(-0.905672)
+var langar = {
+  lat: degreesToRadians(52.890602), lon: degreesToRadians(-0.905672), alt: 35.9
 };
 
 var dropzones = [netheravon, langar];
 
-// GPS lat and lon in radians, and altitude in ft for logging
-var gpsRadians = 
-{
+// GPS lat and lon (rads)
+var gpsRadians = {
   lat: 0, lon: 0
 };
 
-// Return distance between 2 points in m (not using great circle that's too hard for me)
-function getDistance(point1, point2) 
-{
+// Return distance between 2 points, not using great circle that's too hard for me (m)
+function getDistance(point1, point2) {
   distance = Math.acos(Math.sin(point1.lat)*Math.sin(point2.lat)+Math.cos(point1.lat)*Math.cos(point2.lat)*Math.cos(point2.lon-point1.lon))*6371;
   return distance*1000;
 }
 
-// Returns bearing of point 2 from point 1 in degrees (0 - 360)
-function getBearing(point1, point2)
-{
+// Returns bearing of point 2 from point 1 (degs, 0 - 360)
+function getBearing(point1, point2) {
   x = Math.cos(point2.lat) * Math.sin(point2.lon - point1.lon);
   y = Math.cos(point1.lat) * Math.sin(point2.lat) - Math.sin(point1.lat) * Math.cos(point2.lat) * Math.cos(point2.lon - point1.lon);
   bearing = radiansToDegrees(Math.atan2(x, y));
-  if (bearing < 0)
-  {
+  if (bearing < 0) {
     bearing += 360;
   }
   return bearing;
 }
 
-// Return altitude to make it back to dropzone in metres
-function getReturnAltitude(gps, distance)
-{
-  altitude = gps.alt;
+// Return altitude to make it back to dropzone (m AGL)
+function getReturnAltitude(gps, distance, dropzoneAlt) {
+  altitude = gps.alt - dropzoneAlt;
   timeToTarget = distance / (gps.speed * 3.6);
   returnAltitude = altitude - (timeToTarget * sinkRate); 
   return returnAltitude;
 }
 
-// Save sinkrate in m/s (+ve is down)
+var sinkRate;
+
+// Save sinkrate, +ve is down (m/s)
 function calculateSinkRate(gps)
 {
   deltaAltitude = lastAltitude.alt - gps.alt;
@@ -120,10 +97,10 @@ function calculateSinkRate(gps)
   {
     lastAltitude.alt = gps.alt;
     lastAltitude.time = gps.time;
-    calculatedSinkRate = deltaAltitude - (deltaTime / 1000);
+    calculatedSinkRate = deltaAltitude / (deltaTime / 1000);
     if (calculatedSinkRate > 0)
     {
-      sinkRate = calcultedSinkRate;
+      sinkRate = calculatedSinkRate;
     }
   }
 }
@@ -132,58 +109,57 @@ function calculateSinkRate(gps)
 // Calculate bearing and distance to closest dropzone
 // If not heading towards dropzone, draw arrow towards dropzone
 // If heading towards dropzone, draw estimated height to reach dropzone at.
-function navigate(gps)
-{
+function navigate(gps) {
   g.reset().clearRect(Bangle.appRect);
-  g.setFont("Vector", 60).setFontAlign(0,0);
+  g.setFont("Vector", 60).setFontAlign(0,0,1);
   g.clear();
-  if(gps.fix == 1)
-  {
+
+  if(gps.fix == 1) {
     lastGPS = gps;
     calculateSinkRate(gps);
     gpsRadians.lat = degreesToRadians(gps.lat);
     gpsRadians.lon = degreesToRadians(gps.lon);
-    gpsRadians.alt = metresToFeet(gps.alt);
 
-    if (!dropzoneSelected)
-    {
+    if (!dropzoneSelected) {
       dropzone = getDropzone(gpsRadians);
       dropzoneSelected = true;
     }
 
-    //Calculate distance and bearing
     distance = getDistance(gpsRadians, dropzone);
     bearing = getBearing(gpsRadians, dropzone);
     deltaBearing = gps.course - bearing;
-    if (deltaBearing < -180)
-    {
-      deltaBearing += 360;
-    } 
-    else if (deltaBearing > 180)
-    {
-      deltaBearing -= 360;
+
+    if ((deltaBearing < 20) && (deltaBearing > -20)) {
+      returnAltitude = getReturnAltitude(gps, distance, dropzone.alt);
+      if (returnAltitude > 0) {
+        g.setColor("#00ff00");
+        g.drawString(Math.round(metresToFeet(returnAltitude)), 88, 88);
+      } else {
+        g.setColor("#0000ff");
+        g.drawString("LAND\nOFF", 88, 88);
+      }
+    } else {
+      returnAltitude = 0;
+      g.drawImage(require("Storage").read("arrow.img"),88,88,{rotate:degreesToRadians(deltaBearing)});
     }
 
-    // If pointing at dropzone, draw return altitude
-    // Else draw arrow towards dropzone
-    if ((deltaBearing < 20) && (deltaBearing > -20))
-    {
-      g.setColor("#00ff00");
-      returnAltitude = getReturnAltitude(gps, distance);
-      g.drawString(math.round(metresToFeet(returnAltitude)), 88, 88);
-    }
-    else
-    {
-      rotationRadians = degreesToRadians(deltaBearing);
-      g.drawImage(require("Storage").read("Arrow.img"),88,88,{rotate:rotationRadians});
-    }
+    logFrame = {
+      lat: gps.lat,
+      lon: gps.lon,
+      alt: gps.alt,
+      speed: gps.speed,
+      course: gps.course,
+      sinkRate: sinkRate,
+      distance: distance,
+      deltaBearing: deltaBearing,
+      returnAltitude: returnAltitude
+    };
 
-    log();
-  }
-  else
-  {
+    log(logFrame);
+
+  } else {
     g.setColor("#ff0000");
-    g.drawString("No GPS Fix", 88, 88);
+    g.drawString("NO\nGPS\nFIX", 88, 88);
   }
 }
 
@@ -191,13 +167,12 @@ function navigate(gps)
 function getDropzone(gpsRadians)
 {
   smallestDistanceIndex = 0;
-  for (i = 0; i < dropzones.length; i++)
-  {
+  smallestDistance = 100;
+  for (i = 0; i < dropzones.length; i++) {
     console.log(i);
     distance = getDistance(gpsRadians, dropzones[i]);
     console.log(distance);
-    if (distance < smallestDistance)
-    {
+    if (distance < smallestDistance) {
       smallestDistanceIndex = i;
       smallestDistance = distance;
     }
@@ -205,24 +180,23 @@ function getDropzone(gpsRadians)
   return dropzones[smallestDistanceIndex];
 }
 
+var activateOnAltitudeID;
+
 // Save GPS activation pressure and set up activate on altitude
-function initialiseBarometer()
-{
+function initialiseBarometer() {
   activationPressure = groundPressure - deltaPressure;
-  var activateOnAltitudeID = setInterval(activateOnAltitude, 1000);
+  activateOnAltitudeID = setInterval(activateOnAltitude, 1000);
 }
 
 // Draw current pressure and GPS activation pressure.
 // If current pressure below GPS activation pressure, enable GPS navigation and disable barometer
-function activateOnAltitude()
-{
+function activateOnAltitude() {
   Bangle.getPressure().then(output=>{pressure = output.pressure;});
   g.reset().clearRect(Bangle.appRect);
   g.setFont("12x20").setFontAlign(0,0);
-  g.drawString(math.round(activationPressure), 88, 70);
-  g.drawString(math.round(pressure), 88, 105);
-  if (true) //(pressure < activationPressure)
-  {
+  g.drawString(Math.round(activationPressure), 88, 70);
+  g.drawString(Math.round(pressure), 88, 105);
+  if (pressure < activationPressure) {
     checkActivateOnAltitude = false;
     Bangle.setBarometerPower(0, "app");
     Bangle.setGPSPower(1, "app");
@@ -232,28 +206,42 @@ function activateOnAltitude()
   }
 }
 
+var date;
+var logTitle;
+var logFile;
+var loggingStartTime;
+
 // Open log and write headers
-function initialiseLog()
-{
-  var date = new Date();
-  var logTitle = date.toString();
-  var logFile = require("Storage").open(logTitle,"a");
-  var loggingStartTime = Date.now();
+function initialiseLog() {
+  date = new Date();
+  logTitle = date.toString();
+  logFile = require("Storage").open(logTitle,"a");
+  loggingStartTime = Date.now();
   logFile.write("seconds, lat, lon, alt, speed, course, sink rate, DZ distance, DZ delta bearing, DZ return alt\n");
 }
 
-function log(){
+function log(logFrame) {
   loggingCurrentTime = (Date.now() - loggingStartTime) / 1000;
   logFile.write(loggingCurrentTime);
+  logFile.write(",");
   logFile.write(logFrame.lat);
-  logfile.write(logFrame.lon);
+  logFile.write(",");
+  logFile.write(logFrame.lon);
+  logFile.write(",");
   logFile.write(logFrame.alt);
+  logFile.write(",");
   logFile.write(logFrame.speed);
+  logFile.write(",");
   logFile.write(logFrame.course);
+  logFile.write(",");
   logFile.write(logFrame.sinkRate);
-  logFile.Write(logFrame.distance);
+  logFile.write(",");
+  logFile.write(logFrame.distance);
+  logFile.write(",");
   logFile.write(logFrame.deltaBearing);
+  logFile.write(",");
   logFile.write(logFrame.returnAltitude);
+  logFile.write("\n");
 }
 
 // Allow baro 1 second after power up before taking ground pressure reading
