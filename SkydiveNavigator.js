@@ -25,6 +25,18 @@ var deltaBearing;
 // Altitude to return to dropzone
 var returnAltitude = 0;
 
+// File name for flysight log
+var flysightLogFile;
+
+// Log frame for flysight log
+var flysightLogFrame;
+
+// File name for debug log
+var debugLogFile;
+
+// Log frame for debug log
+var debugLogFrame;
+
 // Last altitude (m) and time it was taken
 var lastAltitude = {
   alt: 0, time: new Date()
@@ -143,7 +155,23 @@ function navigate(gps) {
       g.drawImage(require("Storage").read("arrow.img"),88,88,{rotate:degreesToRadians(deltaBearing)});
     }
 
-    logFrame = {
+    flysightLogFrame = {
+      time: Date(Date.now()).toISOString(),
+      lat: gps.lat,
+      lon: gps.lon,
+      alt: gps.alt,
+      vn: gps.speed * Math.cos(gps.course),
+      ve: gps.speed * Math.sin(gps.course),
+      vd: sinkRate,
+      hAcc: gps.hdop * 5,
+      vAcc: 1, // Maybe you could compare with baro?
+      sAcc: 1,
+      gpsFix: gps.fix,
+      numSV: gps.satellites
+    };
+
+    debugLogFrame = {
+      time: (Date.now() - loggingStartTime) / 1000,
       lat: gps.lat,
       lon: gps.lon,
       alt: gps.alt,
@@ -155,7 +183,8 @@ function navigate(gps) {
       returnAltitude: returnAltitude
     };
 
-    log(logFrame);
+    log(flysightLog, flysightLogFrame);
+    log(debugLog, debugLogFrame);
 
   } else {
     g.setColor("#ff0000");
@@ -196,12 +225,13 @@ function activateOnAltitude() {
   g.setFont("12x20").setFontAlign(0,0);
   g.drawString(Math.round(activationPressure), 88, 70);
   g.drawString(Math.round(pressure), 88, 105);
-  if (pressure < activationPressure) {
+  if (true) { //(pressure < activationPressure) {
     checkActivateOnAltitude = false;
     Bangle.setBarometerPower(0, "app");
     Bangle.setGPSPower(1, "app");
     Bangle.on('GPS', function(gps) { navigate(gps); });
-    initialiseLog();
+    initialiseFlysightLog();
+    initialiseDebugLog();
     clearInterval(activateOnAltitudeID);
   }
 }
@@ -211,36 +241,29 @@ var logTitle;
 var logFile;
 var loggingStartTime;
 
-// Open log and write headers
-function initialiseLog() {
-  date = new Date();
-  logTitle = date.toString();
-  logFile = require("Storage").open(logTitle,"a");
-  loggingStartTime = Date.now();
-  logFile.write("seconds, lat, lon, alt, speed, course, sink rate, DZ distance, DZ delta bearing, DZ return alt\n");
+// Open flysight log and write headers
+// http://www.flysight.ca/wiki/index.php/File_format
+function initialiseFlysightLog() {
+  logTitle = "Flysight"; //date.toString();
+  flysightLogFile = require("Storage").open(logTitle,"a");
 }
 
-function log(logFrame) {
-  loggingCurrentTime = (Date.now() - loggingStartTime) / 1000;
-  logFile.write(loggingCurrentTime);
-  logFile.write(",");
-  logFile.write(logFrame.lat);
-  logFile.write(",");
-  logFile.write(logFrame.lon);
-  logFile.write(",");
-  logFile.write(logFrame.alt);
-  logFile.write(",");
-  logFile.write(logFrame.speed);
-  logFile.write(",");
-  logFile.write(logFrame.course);
-  logFile.write(",");
-  logFile.write(logFrame.sinkRate);
-  logFile.write(",");
-  logFile.write(logFrame.distance);
-  logFile.write(",");
-  logFile.write(logFrame.deltaBearing);
-  logFile.write(",");
-  logFile.write(logFrame.returnAltitude);
+// Open debug log and write headers
+function initialiseDebugLog() {
+  date = new Date();
+  logTitle = "debug"; //date.toString();
+  debugLogFile = require("Storage").open(logTitle,"a");
+  loggingStartTime = Date.now();
+  debugLogFile.write("seconds, lat, lon, alt, speed, course, sink rate, DZ distance, DZ delta bearing, DZ return alt\n");
+}
+
+//Write logFrame as csv line on logFile
+function log(logFile, logFrame) {
+  console.log(logFrame);
+  for (i = 0; i < logFrame; i++) {
+    logFile.write(item);
+    logFile.write(",");
+  }
   logFile.write("\n");
 }
 
