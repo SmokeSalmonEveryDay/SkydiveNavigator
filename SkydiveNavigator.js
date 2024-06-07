@@ -114,7 +114,7 @@ function getBearing(point1, point2) {
 // Return altitude to make it back to dropzone (m AGL)
 function getReturnAltitude(gps, distance, dropzoneAlt) {
   altitude = gps.alt - dropzoneAlt;
-  timeToTarget = distance / (gps.speed * 3.6);
+  timeToTarget = distance / (gps.speed / 3.6);
   returnAltitude = altitude - (timeToTarget * sinkRate); 
   return returnAltitude;
 }
@@ -161,8 +161,11 @@ function navigate(gps) {
     distance = getDistance(gpsRadians, dropzone);
     bearing = getBearing(gpsRadians, dropzone);
     deltaBearing = gps.course - bearing;
+    if (deltaBearing < -180){
+      deltaBearing += 180
+    }
 
-    if ((deltaBearing < 20) && (deltaBearing > -20)) {
+    if ((deltaBearing < 20) || (deltaBearing > -20)) {
       returnAltitude = getReturnAltitude(gps, distance, dropzone.alt);
       if (returnAltitude > 0) {
         g.setColor("#00ff00");
@@ -181,9 +184,9 @@ function navigate(gps) {
       lat: gps.lat,
       lon: gps.lon,
       alt: gps.alt,
-      vn: gps.speed * Math.cos(gps.course) / 0.36,
-      ve: gps.speed * Math.sin(gps.course) / 0.36,
-      vd: sinkRate,
+      vn: gps.speed * Math.cos(degreesToRadians(gps.course)) / 0.36,          // velocity north (m/s)
+      ve: gps.speed * Math.sin(degreesToRadians(gps.course)) / 0.36,          // velocity east (m/s)
+      vd: sinkRate,                                                           // velocity down (m/s)
       hAcc: gps.hdop * 5,
       vAcc: 1, // Maybe you could compare with baro?
       sAcc: 1,
@@ -243,7 +246,7 @@ function navigate(gps) {
 function getDropzone(gpsRadians)
 {
   smallestDistanceIndex = 0;
-  smallestDistance = 100;
+  smallestDistance = 1000000;
   for (i = 0; i < dropzones.length; i++) {
     distance = getDistance(gpsRadians, dropzones[i]);
     if (distance < smallestDistance) {
@@ -255,7 +258,7 @@ function getDropzone(gpsRadians)
 }
 
 var initialiseBarometerID;
-var activateOnAltitudeID;
+var activateGPSID;
 
 // Save GPS activation pressure and set up activate on altitude
 function initialiseBarometer() {
@@ -270,32 +273,6 @@ function initialiseBarometer() {
   {
     activationPressure = groundPressure - deltaPressure;
     clearInterval(initialiseBarometerID);
-  }
-}
-
-// Draw current pressure and GPS activation pressure.
-// If current pressure below GPS activation pressure, enable GPS navigation and disable barometer
-function activateOnAltitude() {
-  Bangle.getPressure().then(output=>{
-    if (output)
-    {
-      pressure = output.pressure;
-    }
-  });
-  Bangle.getPressure().catch(function(){pressure = 9999;});
-  g.reset().clearRect(Bangle.appRect);
-  g.setFont("Vector", 32).setFontAlign(0,0,1);
-  g.drawString(Math.round(activationPressure), 50, 88);
-  g.drawString(Math.round(pressure), 126, 88);
-  if (pressure < activationPressure) {
-    checkActivateOnAltitude = false;
-    Bangle.setBarometerPower(0, "app");
-    Bangle.setGPSPower(1, "app");
-    Bangle.on('GPS', function(gps) { navigate(gps); });
-    initialiseFlysightLog();
-    initialiseDebugLog();
-    Bangle.buzz(200);
-    clearInterval(activateOnAltitudeID);
   }
 }
 
@@ -326,7 +303,7 @@ function displaySplash()
 {
   g.reset().clearRect(Bangle.appRect);
   g.setFont("Vector", 32).setFontAlign(0,0,1);
-  g.drawString("Skydive\nNav\nv1.0.2", 88, 88);
+  g.drawString("Skydive\nNav\nv1.0.4", 88, 88);
 }
 
 //Write logFrame as csv line on logFile
@@ -343,7 +320,18 @@ function startup()
 
 function main()
 {
-  activateOnAltitudeID = setInterval(activateOnAltitude, 1000); 
+  g.reset().clearRect(Bangle.appRect);
+  g.setFont("Vector", 32).setFontAlign(0,0,1);
+  g.drawString("Waiting\nFor\nButton...", 88, 88);
+  setWatch(function() {
+      checkActivateOnAltitude = false;
+    Bangle.setBarometerPower(0, "app");
+    Bangle.setGPSPower(1, "app");
+    Bangle.on('GPS', function(gps) { navigate(gps); });
+    initialiseFlysightLog();
+    initialiseDebugLog();
+    Bangle.buzz(200);
+  }, BTN, {edge: "rising", debounce:100, repeat:false});
 }
 
 // Allow baro 1 second after power up before taking ground pressure reading
