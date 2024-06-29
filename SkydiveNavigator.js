@@ -42,6 +42,31 @@ var lastAltitude = {
   alt: 0, time: new Date()
 };
 
+const sinkRatesList = [];
+
+const speedsList = [];
+
+// Add item to list, if there are more than 5 values then remove first value
+function addToList(list, item)
+{
+  if (list.length > 4)
+  {
+    list.shift();
+  }
+  list.push(item);
+}
+
+// Return average of list of numbers
+function listAverage(list)
+{
+  total = 0;
+  for(i = 0; i < list.length; i++)
+  {
+    total += list[i];
+  }
+  average = total / list.length;
+  return average;
+}
 
 function degreesToRadians(degrees) {
   radians = degrees / 57.2958;
@@ -112,14 +137,12 @@ function getBearing(point1, point2) {
 }
 
 // Return altitude to make it back to dropzone (m AGL)
-function getReturnAltitude(gps, distance, dropzoneAlt) {
+function getReturnAltitude(gps, distance, dropzoneAlt, sinkRate, speed) {
   altitude = gps.alt - dropzoneAlt;
-  timeToTarget = distance / (gps.speed / 3.6);
+  timeToTarget = distance / (speed / 3.6);
   returnAltitude = altitude - (timeToTarget * sinkRate); 
   return returnAltitude;
 }
-
-var sinkRate;
 
 // Save sinkrate, +ve is down (m/s)
 function calculateSinkRate(gps)
@@ -133,7 +156,8 @@ function calculateSinkRate(gps)
     calculatedSinkRate = deltaAltitude / (deltaTime / 1000);
     if (calculatedSinkRate > 0)
     {
-      sinkRate = calculatedSinkRate;
+      addToList(sinkRateList, calculatedSinkRate);
+      return averageList(sinkRateList);
     }
   }
 }
@@ -149,7 +173,9 @@ function navigate(gps) {
 
   if(gps.fix == 1) {
     lastGPS = gps;
-    calculateSinkRate(gps);
+    addToList(speedsList, gps.speed);
+    speed = averageList(speedsList);
+    sinkRate = calculateSinkRate(gps);
     gpsRadians.lat = degreesToRadians(gps.lat);
     gpsRadians.lon = degreesToRadians(gps.lon);
 
@@ -162,14 +188,14 @@ function navigate(gps) {
     bearing = getBearing(gpsRadians, dropzone);
     deltaBearing = gps.course - bearing;
     if (deltaBearing < -180){
-      deltaBearing += 180
+      deltaBearing += 180;
     }
 
-    if ((deltaBearing < 20) || (deltaBearing > -20)) {
-      returnAltitude = getReturnAltitude(gps, distance, dropzone.alt);
+    if ((deltaBearing < 20) && (deltaBearing > -20)) {
+      returnAltitude = getReturnAltitude(gps, distance, dropzone.alt, sinkRate, speed);
       if (returnAltitude > 0) {
         g.setColor("#00ff00");
-        g.drawString(Math.round(metresToFeet(returnAltitude)), 88, 88);
+        g.drawString(Math.round(metresToFeet(returnAltitude) / 100) * 100, 88, 88);
       } else {
         g.setColor("#0000ff");
         g.drawString("LAND\nOFF", 88, 88);
@@ -184,8 +210,8 @@ function navigate(gps) {
       lat: gps.lat,
       lon: gps.lon,
       alt: gps.alt,
-      vn: gps.speed * Math.cos(degreesToRadians(gps.course)) / 0.36,          // velocity north (m/s)
-      ve: gps.speed * Math.sin(degreesToRadians(gps.course)) / 0.36,          // velocity east (m/s)
+      vn: speed * Math.cos(degreesToRadians(gps.course)) * 0.36,          // velocity north (m/s)
+      ve: speed * Math.sin(degreesToRadians(gps.course)) * 0.36,          // velocity east (m/s)
       vd: sinkRate,                                                           // velocity down (m/s)
       hAcc: gps.hdop * 5,
       vAcc: 1, // Maybe you could compare with baro?
@@ -213,8 +239,10 @@ function navigate(gps) {
       lat: gps.lat,
       lon: gps.lon,
       alt: gps.alt,
-      speed: gps.speed,
+      speed: gps.speed * 0.36,
       course: gps.course,
+      hdop: gps.hdop,
+      numSV: gps.satellites, 
       sinkRate: sinkRate,
       distance: distance,
       deltaBearing: deltaBearing,
@@ -226,15 +254,20 @@ function navigate(gps) {
         + this.alt + ","
         + this.speed + ","
         + this.course + ","
+        + this.hdop + ","
+        + this.numSV + ","
         + this.sinkRate + ","
         + this.distance + ","
         + this.deltaBearing + ","
         + this.returnAltitude + "\n";
       }
     };
-
-    log(flysightLogFile, flysightLogFrame);
-    log(debugLogFile, debugLogFrame);
+    
+    if (gps.speed > 18 && gps.speed < 120)        //GPS speed between 10 and 65 kts (canopy flight)
+    {
+      log(flysightLogFile, flysightLogFrame);
+      log(debugLogFile, debugLogFrame);
+    }
 
   } else {
     g.setColor("#ff0000");
@@ -296,14 +329,14 @@ function initialiseDebugLog() {
   logTitle = "Dbug_" + date.toISOString();
   debugLogFile = require("Storage").open(logTitle,"a");
   loggingStartTime = Date.now();
-  debugLogFile.write("seconds, lat, lon, alt, speed, course, sink rate, DZ distance, DZ delta bearing, DZ return alt\n");
+  debugLogFile.write("seconds, lat, lon, alt (m), speed (m/s), course (degs), hdop, satellites, sink rate raw (m/s), DZ distance (m), DZ delta bearing (degs), DZ return (m) alt\n");
 }
 
 function displaySplash()
 {
   g.reset().clearRect(Bangle.appRect);
   g.setFont("Vector", 32).setFontAlign(0,0,1);
-  g.drawString("Skydive\nNav\nv1.0.4", 88, 88);
+  g.drawString("Skydive\nNav\nv1.0.6", 88, 88);
 }
 
 //Write logFrame as csv line on logFile
