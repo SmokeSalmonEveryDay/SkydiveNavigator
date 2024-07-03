@@ -111,6 +111,10 @@ var klatovy = {
   lat: degreesToRadians(49.418278), lon: degreesToRadians(13.321076), alt: 393.0
 };
 
+var dunkeswell = {
+  lat: degreesToRadians(50.8630245), lon: degreesToRadians(-3.2363702), alt: 250.0
+};
+
 // List of dropzone, with lat, lon and alt (m)
 var dropzones = [netheravon, langar, sibson, dunkeswell, tilstock, hibaldstow, klatovy];
 
@@ -156,10 +160,16 @@ function calculateSinkRate(gps)
     calculatedSinkRate = deltaAltitude / (deltaTime / 1000);
     if (calculatedSinkRate > 0)
     {
-      addToList(sinkRateList, calculatedSinkRate);
-      return averageList(sinkRateList);
+      addToList(sinkRatesList, calculatedSinkRate);
+      return listAverage(sinkRatesList);
     }
   }
+}
+
+function calculateSpeed(speed)
+{
+  addToList(speedsList, speed);
+  return listAverage(speedsList);
 }
 
 // If got a GPS fix for first time, get closest dropzone
@@ -173,8 +183,7 @@ function navigate(gps) {
 
   if(gps.fix == 1) {
     lastGPS = gps;
-    addToList(speedsList, gps.speed);
-    speed = averageList(speedsList);
+    speed = calculateSpeed(gps.speed);
     sinkRate = calculateSinkRate(gps);
     gpsRadians.lat = degreesToRadians(gps.lat);
     gpsRadians.lon = degreesToRadians(gps.lon);
@@ -300,8 +309,7 @@ function initialiseBarometer() {
       {
         groundPressure = output.pressure;
       }
-    });
-  Bangle.getPressure().catch(function(){});
+    }).catch(function(){});
   if (groundPressure)
   {
     activationPressure = groundPressure - deltaPressure;
@@ -336,7 +344,7 @@ function displaySplash()
 {
   g.reset().clearRect(Bangle.appRect);
   g.setFont("Vector", 32).setFontAlign(0,0,1);
-  g.drawString("Skydive\nNav\nv1.0.6", 88, 88);
+  g.drawString("Skydive\nNav\nv1.0.7", 88, 88);
 }
 
 //Write logFrame as csv line on logFile
@@ -357,7 +365,7 @@ function main()
   g.setFont("Vector", 32).setFontAlign(0,0,1);
   g.drawString("Waiting\nFor\nButton...", 88, 88);
   setWatch(function() {
-      checkActivateOnAltitude = false;
+    checkActivateOnAltitude = false;
     Bangle.setBarometerPower(0, "app");
     Bangle.setGPSPower(1, "app");
     Bangle.on('GPS', function(gps) { navigate(gps); });
