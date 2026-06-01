@@ -1,0 +1,15 @@
+{
+  "name": "sn_js",
+  "version": "1.0.0",
+  "main": "SkydiveNavigator.app.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "jest": "^30.4.2"
+  }
+}

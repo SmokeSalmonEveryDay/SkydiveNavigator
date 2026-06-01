@@ -1,49 +1,27 @@
-// Pressure difference from ground at which to activate (Pa)
-var deltaPressure = 85; // Equivalent to 2500 ft
+// // Pressure difference from ground at which to activate (Pa)
+// var deltaPressure = 85; // Equivalent to 2500 ft
 
-// Pressure at which to enable GPS (Pa)
-var activationPressure = 0;
+// // Pressure at which to enable GPS (Pa)
+// var activationPressure = 0;
 
-// Pressure at ground QFE (Pa)
-var groundPressure;
+// // Pressure at ground QFE (Pa)
+// var groundPressure;
 
-// Pressure from barometer (Pa)
-var pressure = 1013.25;
+// // Pressure from barometer (Pa)
+// var pressure = 1013.25;
 
-// Has closest dropzone been found
-var dropzoneSelected = false;
 
-// Closest dropzone
-var dropzone;
-
-// Distance from dropzone
-var distance;
-
-// Change in bearing to dropzone
-var deltaBearing;
-
-// Altitude to return to dropzone
-var returnAltitude = 0;
-
-// File name for flysight log
-var flysightLogFile;
-
-// Log frame for flysight log
-var flysightLogFrame;
-
-// File name for debug log
-var debugLogFile;
-
-// Log frame for debug log
-var debugLogFrame;
-
-// Last altitude (m) and time it was taken
-var lastAltitude = {
-  alt: 0, time: new Date()
-};
-
+var dropzoneSelected = false;   // Has closest dropzone been found
+var dropzone;                   // Closest dropzone
+var distance;                   // Distance from dropzone
+var deltaBearing;               // Change in bearing to dropzone
+var returnAltitude = 0;         // Altitude to return to dropzone
+var flysightLogFile;            // File name for flysight log
+var flysightLogFrame;           // Log frame for flysight log
+var debugLogFile;               // File name for debug log
+var debugLogFrame;              // Log frame for debug log
+var lastAltitude = { alt: 0, time: new Date()};   // Last altitude (m) and time it was taken
 const sinkRatesList = [];
-
 const speedsList = [];
 
 // Add item to list, if there are more than 5 values then remove first value
@@ -83,39 +61,14 @@ function metresToFeet(metres) {
   return feet;
 }
 
-var netheravon = {
-  lat: degreesToRadians(51.2428054), lon: degreesToRadians(-1.7620569), alt: 134.6
-};
-
-var langar = {
-  lat: degreesToRadians(52.890602), lon: degreesToRadians(-0.905672), alt: 35.9
-};
-
-var sibson = {
-  lat: degreesToRadians(52.561508), lon: degreesToRadians(-0.396838), alt: 40.0
-};
-
-var dunkeswell = {
-  lat: degreesToRadians(50.863488), lon: degreesToRadians(-3.236506), alt: 250.0
-};
-
-var tilstock = {
-  lat: degreesToRadians(52.932740), lon: degreesToRadians(-2.645203), alt: 92.0
-};
-
-var hibaldstow = {
-  lat: degreesToRadians(53.497539), lon: degreesToRadians(-0.515410), alt: 9.0
-};
-
-var klatovy = {
-  lat: degreesToRadians(49.418278), lon: degreesToRadians(13.321076), alt: 393.0
-};
-
-var dunkeswell = {
-  lat: degreesToRadians(50.8630245), lon: degreesToRadians(-3.2363702), alt: 250.0
-};
-
-// List of dropzone, with lat, lon and alt (m)
+var netheravon = { lat: degreesToRadians(51.2428054), lon: degreesToRadians(-1.7620569), alt: 134.6};
+var langar = { lat: degreesToRadians(52.890602), lon: degreesToRadians(-0.905672), alt: 35.9};
+var sibson = { lat: degreesToRadians(52.561508), lon: degreesToRadians(-0.396838), alt: 40.0};
+var dunkeswell = { lat: degreesToRadians(50.863488), lon: degreesToRadians(-3.236506), alt: 250.0};
+var tilstock = { lat: degreesToRadians(52.932740), lon: degreesToRadians(-2.645203), alt: 92.0};
+var hibaldstow = { lat: degreesToRadians(53.497539), lon: degreesToRadians(-0.515410), alt: 9.0};
+var klatovy = { lat: degreesToRadians(49.418278), lon: degreesToRadians(13.321076), alt: 393.0};
+var dunkeswell = { lat: degreesToRadians(50.8630245), lon: degreesToRadians(-3.2363702), alt: 250.0};
 var dropzones = [netheravon, langar, sibson, dunkeswell, tilstock, hibaldstow, klatovy];
 
 // GPS lat and lon (rads)
@@ -149,6 +102,7 @@ function getReturnAltitude(gps, distance, dropzoneAlt, sinkRate, speed) {
 }
 
 // Save sinkrate, +ve is down (m/s)
+// TODO: Calculate from baro, maybe fuse them
 function calculateSinkRate(gps)
 {
   deltaAltitude = lastAltitude.alt - gps.alt;
@@ -195,9 +149,9 @@ function navigate(gps) {
 
     distance = getDistance(gpsRadians, dropzone);
     bearing = getBearing(gpsRadians, dropzone);
-    deltaBearing = gps.course - bearing;
+    deltaBearing = bearing - gps.course;
     if (deltaBearing < -180){
-      deltaBearing += 180;
+      deltaBearing += 360;
     }
 
     if ((deltaBearing < 20) && (deltaBearing > -20)) {
@@ -244,10 +198,10 @@ function navigate(gps) {
     };
 
     debugLogFrame = {
-      time: (Date.now() - loggingStartTime) / 1000,
+      time: Date(Date.now()).toISOString(),
       lat: gps.lat,
       lon: gps.lon,
-      alt: gps.alt,
+      alt: gps.alt - dropzone.alt,
       speed: gps.speed * 0.36,
       course: gps.course,
       hdop: gps.hdop,
@@ -271,12 +225,11 @@ function navigate(gps) {
         + this.returnAltitude + "\n";
       }
     };
-    
-    if (gps.speed > 18 && gps.speed < 120)        //GPS speed between 10 and 65 kts (canopy flight)
-    {
+
+    if (gps.speed > 18 && gps.speed < 120) {        //GPS speed between 10 and 65 kts (canopy flight)
       log(flysightLogFile, flysightLogFrame);
-      log(debugLogFile, debugLogFrame);
     }
+    log(debugLogFile, debugLogFrame);
 
   } else {
     g.setColor("#ff0000");
@@ -299,23 +252,23 @@ function getDropzone(gpsRadians)
   return dropzones[smallestDistanceIndex];
 }
 
-var initialiseBarometerID;
-var activateGPSID;
+// var initialiseBarometerID;
+// var activateGPSID;
 
 // Save GPS activation pressure and set up activate on altitude
-function initialiseBarometer() {
-  Bangle.getPressure().then(output=>{
-      if(output)
-      {
-        groundPressure = output.pressure;
-      }
-    }).catch(function(){});
-  if (groundPressure)
-  {
-    activationPressure = groundPressure - deltaPressure;
-    clearInterval(initialiseBarometerID);
-  }
-}
+// function initialiseBarometer() {
+//   Bangle.getPressure().then(output=>{
+//       if(output)
+//       {
+//         groundPressure = output.pressure;
+//       }
+//     }).catch(function(){});
+//   if (groundPressure)
+//   {
+//     activationPressure = groundPressure - deltaPressure;
+//     clearInterval(initialiseBarometerID);
+//   }
+// }
 
 var date;
 var logTitle;
@@ -337,14 +290,14 @@ function initialiseDebugLog() {
   logTitle = "Dbug_" + date.toISOString();
   debugLogFile = require("Storage").open(logTitle,"a");
   loggingStartTime = Date.now();
-  debugLogFile.write("seconds, lat, lon, alt (m), speed (m/s), course (degs), hdop, satellites, sink rate raw (m/s), DZ distance (m), DZ delta bearing (degs), DZ return (m) alt\n");
+  debugLogFile.write("time, lat, lon, altAGL (m), speed (m/s), course (degs), hdop, satellites, sink rate raw (m/s), DZ distance (m), DZ delta bearing (degs), DZ return (m) alt\n");
 }
 
 function displaySplash()
 {
   g.reset().clearRect(Bangle.appRect);
   g.setFont("Vector", 32).setFontAlign(0,0,1);
-  g.drawString("Skydive\nNav\nv1.0.7", 88, 88);
+  g.drawString("Skydive\nNav\nv1.1.0", 88, 88);
 }
 
 //Write logFrame as csv line on logFile
@@ -356,7 +309,7 @@ function log(logFile, logFrame)
 function startup()
 {
   displaySplash();
-  initialiseBarometerID = setInterval(initialiseBarometer, 500);
+  // initialiseBarometerID = setInterval(initialiseBarometer, 500);
 }
 
 function main()
@@ -365,8 +318,8 @@ function main()
   g.setFont("Vector", 32).setFontAlign(0,0,1);
   g.drawString("Waiting\nFor\nButton...", 88, 88);
   setWatch(function() {
-    checkActivateOnAltitude = false;
-    Bangle.setBarometerPower(0, "app");
+    // checkActivateOnAltitude = false;
+    // Bangle.setBarometerPower(0, "app");
     Bangle.setGPSPower(1, "app");
     Bangle.on('GPS', function(gps) { navigate(gps); });
     initialiseFlysightLog();
@@ -376,7 +329,7 @@ function main()
 }
 
 // Allow baro 1 second after power up before taking ground pressure reading
-Bangle.setBarometerPower(1, "app");
+// Bangle.setBarometerPower(1, "app");
 startup();
 setTimeout(main, 3000);
 
